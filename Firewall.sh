@@ -24,3 +24,5 @@ db.vm.network "private_network",
 ip: "10.0.3.2",
 virtualbox_intnet: "backend-net"
 end
+
+#Här kommer en liten ändring för att kontrollerat att allt fungerar!
