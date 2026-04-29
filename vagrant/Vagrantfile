@@ -1,0 +1,72 @@
+# Denna fil skapar de fyra virtuella maskinerna (firewall, client, webserver och database) och deras isolerade nätverk.
+
+# Unviker hårdkodning genom att ha variabler längst upp.
+FW_FRONT_IP = "10.0.1.1"
+FW_DMZ_IP = "10.0.2.1"
+FW_BACK_IP = "10.0.3.1"
+CLIENT_IP = "10.0.1.2"
+WEBSERVER_IP = "10.0.2.2"
+DATABASE_IP = "10.0.3.2"
+
+Vagrant.configure("2") do |config|
+
+ # Vilken operativsystemmall ska användas?
+ config.vm.box = "ubuntu/jammy64"
+
+ # Skapar en ny VM med namnet "firewall".
+ config.vm.define "firewall" do |fw|
+    fw.vm.hostname = "firewall"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (frontend).
+    fw.vm.network "private_network", ip: FW_FRONT_IP, virtualbox_intnet: "frontend-net"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (DMZ-net).
+    fw.vm.network "private_network", ip: FW_DMZ_IP, virtualbox_intnet: "dmz-net"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (Backend).
+    fw.vm.network "private_network", ip: FW_BACK_IP, virtualbox_intnet: "backend.net"
+
+    # Skapar en bro mellan den fysiska datorn (host) och den virtuella maskinen (guest).
+    fw.vm.network "forwarded_port", guest: 80, host: 8080
+ end
+
+ # Skapar en ny VM med namnet "client".
+ config.vm.define "client" do |cl|
+    cl.vm.hostname = "client"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (frontend).
+    cl.vm.network "private_network", ip: CLIENT_IP, virtualbox_intnet: "frontend-net"
+ end
+
+ # Skapar en ny VM med namnet "webserver".
+ config.vm.define "webserver" do |web|
+    web.vm.hostname = "webserver"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (DMZ-net).
+    web.vm.network "private_network", ip: WEBSERVER_IP, virtualbox_intnet: "dmz-net"
+ end
+
+ #Skapar en ny VM med namner "database".
+ config.vm.define "database" do |db|
+    db.vm.hostname = "database"
+
+    # Intnet nätverk med statisk IP som endast är tillgänligt för VM:s i samma segment (Backend).
+    db.vm.network "private_network", ip: DATABASE_IP, virtualbox_intnet: "backend-net"
+ end
+
+ # Det fysiska begränsningarna för VM:sen.
+
+ # Använder VirtuelBox som hypovisor för att köra maskinerna.
+ config.vm.provider "virtualbox" do |vb|
+
+    # Tillderlar 1024 MB RAM till varje VM.
+    vb.memory = 1024
+
+    # Begränsar varje maskin till 1 processorkärna.
+    vb.cpus = 1
+ end
+
+ config.vm.provision "ansible_local" do |ansible|
+   ansible.playbook = "playbook.yml"
+ end
+end  
