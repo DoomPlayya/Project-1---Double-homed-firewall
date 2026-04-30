@@ -1,0 +1,144 @@
+# Konfiguration av alla VMs
+- name: Konfigurera mina maskiner
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: uppdatera apt-cache och installera basverktyg
+      apt:
+        update_cache: yes
+        name: [curl, net-tools, ufw]
+        state: present
+
+    - name: Stäng av UFW för att undvika konflikt med våra iptables-regler
+      service:
+        name: ufw
+        state: stopped
+        enabled: no
+
+# Konfiguration av Brandvägg
+- name: Konfigurera brandväggs VM
+  hosts: firewall
+  become: yes
+  tasks:
+    - name: Aktivera IP Forwarding i kärnan
+      sysctl: 
+        name: net.upv4.ip_forward
+        value: '1'
+        state: present
+        reload: yes
+
+    - name: Rensa gamla iptables-regler (Flush)
+      iptables:
+        chain: "{{ item }}"
+        flush: yes
+      loop: [ 'INPUT', 'FORWARD', 'OUTPUT' ]
+
+    - name: Tillåt etablerad trafik
+      iptables:
+        chain: FORWARD
+        ctstate: ESTABLISHED,RELATED
+        jump: ACCEPT
+
+    - name: Regler för Klient -> Webbserver (Port 80 & 443)
+      iptables:
+        chain: FORWARD
+        protocol: tcp
+        source: 10.0.1.0/24
+        destination: 10.0.2.2
+        destination_port: "{[ item ]}"
+        jump: ACCEPT
+        comment: "VG_RULE: CLIENT_TO_WEB"
+      loop: [ '80', '443' ]
+
+    - name: Regler för Webbserver -> Databas (Port 5432)
+      iptables:
+        chain: FORWARD
+        protocol: tcp
+        source: 10.0.2.2
+        destination: 10.0.3.2
+        destination_port: 5432
+        jump: ACCEPT
+        comment: "VG_RULE: WEB_TO_DB"
+
+    - name: Neka all övrig trafik, auto-DROP
+      iptables:
+        chain: FORWARD
+        policy: DROP
+
+# Konfigurera Webbserver
+- name: Konfigurera webbserver VM
+  hosts: web
+  become: yes
+  tasks:
+    - name: Installera Nginx
+      apt: 
+        name: nginx
+        state: present
+
+    - name: Skapa mapp för certifikat
+      file:
+        path: "/etc/nginx/ssl/"
+        state: directory
+        mode: '0700'
+
+    - name: Generera självsignerat certifikat i mapp
+      command: >
+        openssl req -x509 -nodes -days 90 -newkey rsa:2048
+        -keyout /etc/nginx/ssl/privkey.pem
+        -out /etc/nginx/ssl/fullchain.pem
+        -subj "/CN={{ my_web_domain }}"
+    
+    - name: Konfigurera Nginx som Reverse Proxy för port 80 och 443
+      copy:
+        dest: /etc/nginx/sites-available/default
+        content: |
+          server {
+              listen 80;
+              listen 443 ssl;
+              server_name {{ my_web_domain }};
+              
+              ssl_certificate /etc/nginx/ssl/fullchain.pem;
+              ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+              location / {
+                   proxy_pass http://127.0.0.1:5000
+                   proxy_set_header Host $host;
+                   proxy_set_header X-Real-IP $remote_addr;
+                   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                   proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+      notify: Restart Nginx  
+
+    - name: Sätt Default Gateway mot brandväggs VM
+      shell: ip route replace default via 10.0.2.1
+
+
+# Konfigurera Databas
+- name: Installera och konfigurera Databas
+  hosts: db
+  become: yes
+  tasks:
+    - name: Installera PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+
+    - name: Tillåt PostgreSQL att lyssna på nätverket
+      lineinfile:
+        path: "{{ item }}"
+        regexp: "^#?listen_addresses ="
+        line: "listen_addresses = '*'"
+      with_fileglob:
+        - /etc/postgresql/*/main/postgresql.conf
+      notify: Restart Postgres
+
+    - name: Sätt Default Gateway mot Brandväggen
+      shell: ip route replace default via 10.0.3.1
+    
+  handlers:
+    - name: Restart Postgres
+      service:
+        name: postgresql
+        state: restarted
