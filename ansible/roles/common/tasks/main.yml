@@ -1,0 +1,24 @@
+---
+- name: uppdatera apt-cache och installera basverktyg
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Installera basverktyg för felsökning
+  apt:
+    name:
+      - curl
+      - net-tools
+      - ufw
+      - iputils-ping
+      - vim
+      - traceroute
+    state: present
+  become: yes
+
+- name: Stäng av UFW för att undvika konflikt med våra iptables-regler
+  service:
+    name: ufw
+    state: stopped
+    enabled: no
+

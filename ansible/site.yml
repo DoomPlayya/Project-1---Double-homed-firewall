@@ -1,0 +1,34 @@
+---
+- name: Konfigurera Firewall-VM
+  hosts: firewall
+  vars_files:
+    - vars/main.yml
+  roles:
+    - common
+    - firewall
+
+- name: Konfigurera Database-VM
+  hosts: database
+  vars_files:
+    - vars/main.yml
+    - vars/secrets.yml
+  roles:
+    - common
+    - database
+
+- name: Konfigurera Webbserver-VM
+  hosts: webserver
+  vars_files:
+    - vars/main.yml
+  roles:
+    - common
+    - flask
+    - nginx
+
+- name: Konfigurera Client-VM
+  hosts: client
+  vars_files:
+    - vars/main.yml
+  roles:
+    - common
+    - client    

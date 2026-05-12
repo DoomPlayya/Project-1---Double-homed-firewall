@@ -1,0 +1,5 @@
+ansible/vars/secrets.yml
+.vagrant
+.env
+*.pem, *.key
+ansible_vault

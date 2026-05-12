@@ -1,0 +1,36 @@
+---
+- name: Tillåt SSH så vi inte blir utelåsta
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ ssh_port }}"
+    jump: ACCEPT
+
+- name: Tillåt DNS-uppslag från interna nätverk
+  iptables:
+    chain: FORWARD
+    protocol: "{{ item }}"
+    destination_port: "{{ dns_port }}"
+    jump: ACCEPT
+  loop: [ 'udp', 'tcp' ]
+
+- name: Sätt firewall som Default Gateway
+  shell: ip route replace default via "{{ firewall_frontend_ip }}"
+  become: yes
+
+- name: Lägg till domännamet i /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ webserver_ip }} {{ my_web_domain }}"
+    state: present
+
+- name: Säkerställ fungerande DNS-server
+  lineinfile:
+    path: /etc/resolv.conf
+    line: "nameserver 8.8.8.8"
+  become: yes
+
+- name: Installera verktyg för att testa webben
+  apt:
+    name: curl
+    state: present

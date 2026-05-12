@@ -1,0 +1,103 @@
+---
+- name: Aktivera IP Forwarding i kärnan
+  sysctl: 
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes
+
+- name: Rensa gamla iptables-regler (Flush)
+  iptables:
+    chain: "{{ item }}"
+    flush: yes
+  loop: [ 'INPUT', 'FORWARD', 'OUTPUT' ]
+
+- name: Tillåt etablerad trafik
+  iptables:
+    chain: FORWARD
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+
+- name: Tillåt Loopback-trafik
+  iptables:
+    chain: INPUT
+    in_interface: lo
+    jump: ACCEPT.
+
+- name: Tillåt svar på utgående trafik
+  iptables:
+    chain: INPUT
+    ctstate: ESTABLISHED, RELATED
+    jump: ACCEPT
+
+- name: Sätt default policy ACCEPT på OUTPUT
+  iptables:
+    chain: OUTPUT
+    policy: ACCEPT
+
+- name: Regler för Klient -> Webbserver (Port 80 & 443)
+  iptables:
+    chain: FORWARD
+    protocol: tcp
+    source: "{{ client_ip }}"
+    destination: "{{ webserver_ip }}"
+    destination_port: "{{ item }}"
+    jump: ACCEPT
+    comment: "VG_RULE: CLIENT_TO_WEB"
+  loop: [ "{{ http }}", "{{ https }}" ]
+
+- name: Regler för Webbserver -> Databas (Port 5432)
+  iptables:
+    chain: FORWARD
+    protocol: tcp
+    source: "{{ webserver_ip }}"
+    destination: "{{ database_ip }}"
+    destination_port: "{{ db_port }}"
+    jump: ACCEPT
+
+- name: Tillåt SSH så vi inte blir utelåsta
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ ssh_port }}"
+    jump: ACCEPT
+
+- name: Tillåt DNS-uppslag från interna nätverk
+  iptables:
+    chain: FORWARD
+    protocol: "{{ item }}"
+    destination_port: "{{ dns_port }}"
+    jump: ACCEPT
+  loop: [ 'udp', 'tcp' ]
+
+- name: Tillåt interna maskiner att nå internet (för uppdateringar)
+  iptables:
+    chain: FORWARD
+    protocol: tcp
+    source: "{{ item.src }}"
+    destination_port: "{{ item.port }}"
+    jump: ACCEPT
+  loop: 
+    - { src: "{{ frontend_net }}", port: "{{ http }}" }
+    - { src: "{{ frontend_net }}", port: "{{ https }}" }
+    - { src: "{{ dmz_net }}", port: "{{ http }}" }
+    - { src: "{{ dmz_net }}", port: "{{ https }}" }
+
+- name: Aktivera NAT Masquerade (Gör att svaren hittar hem)
+  iptables:
+    table: nat
+    chain: POSTROUTING
+    out_interface: enp0s3
+    jump: MASQUERADE
+
+- name: Stopp för Klient -> Databas
+  iptables:
+    chain: FORWARD
+    source: "{{ client_ip }}"
+    destination: "{{ database_ip }}"
+    jump: DROP
+    
+- name: Neka all övrig trafik, auto-DROP
+  iptables:
+    chain: FORWARD
+    policy: DROP
