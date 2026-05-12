@@ -27,7 +27,7 @@
 - name: Tillåt svar på utgående trafik
   iptables:
     chain: INPUT
-    ctstate: ESTABLISHED, RELATED
+    ctstate: "ESTABLISHED,RELATED"
     jump: ACCEPT
 
 - name: Sätt default policy ACCEPT på OUTPUT
@@ -55,13 +55,6 @@
     destination_port: "{{ db_port }}"
     jump: ACCEPT
 
-- name: Tillåt SSH så vi inte blir utelåsta
-  iptables:
-    chain: INPUT
-    protocol: tcp
-    destination_port: "{{ ssh_port }}"
-    jump: ACCEPT
-
 - name: Tillåt DNS-uppslag från interna nätverk
   iptables:
     chain: FORWARD
@@ -83,11 +76,35 @@
     - { src: "{{ dmz_net }}", port: "{{ http }}" }
     - { src: "{{ dmz_net }}", port: "{{ https }}" }
 
+- name: Tillåt inkommande Ping (ICMP)
+  iptables:
+    chain: INPUT
+    protocol: icmp
+    icmp_type: echo-request
+    jump: ACCEPT
+
+- name: Logga trafik som kommer kastas
+  iptables:
+    chain: FORWARD
+    jump: LOG
+    log_prefix: "IPTABLES_DROP: "
+    log_level: 4
+
+- name: Begränsa SSH-försök (Brute force protection)
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ ssh_port }}"
+    ctstate: NEW
+    limit: 3/minute
+    limit_burst: 5
+    jump: ACCEPT
+
 - name: Aktivera NAT Masquerade (Gör att svaren hittar hem)
   iptables:
     table: nat
     chain: POSTROUTING
-    out_interface: enp0s3
+    out_interface: "{{ NET_PORT }}"
     jump: MASQUERADE
 
 - name: Stopp för Klient -> Databas
@@ -96,8 +113,24 @@
     source: "{{ client_ip }}"
     destination: "{{ database_ip }}"
     jump: DROP
-    
+
+- name: Blockera DMZ från att initiera trafik mot Frontend
+  iptables:
+    chain: FORWARD
+    source: "{{ dmz_net }}"
+    destination: "{{ frontend_net }}"
+    ctstate: NEW
+    jump: DROP
+
 - name: Neka all övrig trafik, auto-DROP
   iptables:
     chain: FORWARD
-    policy: DROP
+    policy: DROP    
+
+- name: Installera iptables-persistent
+  apt:
+    name: iptables-persistent
+    state: present
+
+- name: Spara iptables-regler till fil
+  shell: iptables-save > /etc/iptables/rules.v4
