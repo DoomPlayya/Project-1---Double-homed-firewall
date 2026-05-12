@@ -20,6 +20,8 @@ dns_port: 53
 http: 80
 https: 443
 
+NET_PORT: enp0s3
+
 app_root: "/home/vagrant"
 app_script: "app.py"
 
