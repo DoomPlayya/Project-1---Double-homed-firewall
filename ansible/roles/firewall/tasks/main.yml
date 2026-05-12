@@ -22,7 +22,7 @@
   iptables:
     chain: INPUT
     in_interface: lo
-    jump: ACCEPT.
+    jump: ACCEPT
 
 - name: Tillåt svar på utgående trafik
   iptables:
