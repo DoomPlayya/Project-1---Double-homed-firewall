@@ -222,7 +222,7 @@ Vi använder en gitignore strategi för att hantera lokala hemligheter. Filen an
 
 Att checka in lösenord i ett publikt (eller privat) repo är en stor säkerhetsrisk. Om en angripare får tillgång till koden skulle de direkt kunna logga in i databasen. Genom att separera konfiguration från hemligheter följer projektet principen om Configuration Hardening.
 
-**Instruktion för användare*
+**Instruktion för användare**
 
 1. Skapa filen ansible/vars/secrets.yml
 2. Fyll i egna värden
