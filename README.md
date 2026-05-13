@@ -29,7 +29,7 @@
 
 | VM | Roll | IP-adress | Port forwarding | Beskrivning |
 |---|---|---|---|---|
-| `firewall` | Brandvägg | Frontend: 10.0.1.1, DMZ: 10.0.5.1, Backend: 10.0.3.1 | `:80 → host:8080` | Tar emot trafik från hosten och skickar vidare till webservern |
+| `firewall` | Brandvägg | Frontend: 10.0.1.1, DMZ: 10.0.5.1, Backend: 10.0.3.1 | `:80 → host:8080` | Tar emot trafik från hosten och skickar vidare till webbservern |
 | `client` | Användare | 10.0.1.2 | — | Host-datorn som testar systemet |
 | `webserver` | Webbserver | 10.0.5.2 | — | Kör Nginx och visar hemsidan |
 | `database` | Databas | 10.0.3.2 | — | Lagrar data, isolerad från internet |
@@ -90,7 +90,7 @@ Project-1---Double-homed-firewall/
 │   └── Topologi.png         # Nätverksdiagram över labbmiljön
 │
 ├── test/
-│   └── verify.sh            # Skript för automatiserad verifiering   
+│   └── verify.sh            # Script för automatiserad verifiering   
 │
 ├── .gitignore               # Exkluderar känsliga filer från Git
 ├── README.md                # Projektdokumentation (denna fil)
@@ -103,7 +103,12 @@ Project-1---Double-homed-firewall/
 
 ### Vagrantfile 
 
-Definierar fyra virtuella maskiner i VirtualBox. Brandväggen agerar gateway med två nätverkskort, ett publikt mot host-datorn (10.0.1.1) och ett isolerat backend-nätverk (10.0.3.1) där databasservern ligger. Port forwarding är konfigurerad på brandväggen för att tillåta trafik till webbservern, medan databasen är helt isolerad utan extern åtkomst.
+Definierar fyra virtuella maskiner i VirtualBox som är uppdelade i tre separata interna nätverk (intnet) för att skapa en realistisk nätverkstopologi.
+- Firewall-VM: Fungerar som en gateway med tre gränssnitt: frontend-net (10.0.1.1), dmz-net (10.0.2.1) och backend-net (10.0.3.1). 
+- Klient-VM: Placerad i frontend-net (10.0.1.2).  
+- Webbserver-VM: Placerad i dmz-net (10.0.2.2).  
+- Databasserver-VM: Placerad i backend-net (10.0.3.2).  
+Windows-hosten är helt isolerad från dessa nätverk, vilket tvingar all trafik att passera brandväggen.
 
 ### ansible.cfg
 
@@ -111,40 +116,34 @@ Ser till att Ansible alltid använder samma regler när den konfigurerar miljön
 
 ### inventory.ini
 
-Möjliggör segmentering. Huvuduppgift: Systemets adresslista. Den grupperar maskinerna logiskt i [firewall], [nginx], [flask] och [database].
+Grupperar maskinerna utifrån deras funktioner: [firewall], [webserver], [database] och [client]. Detta gör det möjligt för Ansible att applicera specifika säkerhetskonfigurationer, såsom brandväggsregler, på rätt maskin.
 
 ### site.yml (Playbook)
 
-Koordinerar samtliga roller i projektet och säkerställer en logisk ordning 
-1. **firewall** - Nätverksskyddet sätt upp först.
-2. **database** - Databasmiljön säkras innan applikationen startar.
-3. **flask/nginx** - Applikationslagret driftsätts sist när infrastrukturen är redo.
+Orkestrerar driftsättningen i en logisk ordning för att säkerställa att beroenden uppfylls:
+1. Brandvägg: Konfigureras först med IP-forwarding och routing-regler.  
+2. Databas: Sätts upp med PostgreSQL och UFW-regler för att endast tillåta trafik från DMZ.
+3. Webbserver: Installerar webbtjänsten och konfigurerar anslutningen mot databasen. 
+4. Klient: Konfigureras för att kunna nå webbtjänsten via brandväggen.
 
 ### Rollen firewall
 
-Aggerar bro mellan det publika nätverket och det isolerade backend nätet. Den hanterar routing och trafikfiltrering via iptables och ser till att ingen obehörig trafik når de interna servrarna.
+Detta är hjärtat i projektet. Rollen aktiverar IP-forwarding i kärnan och använder iptables eller nftables för att styra trafiken. Den tillåter HTTP/HTTPS-trafik från klienten till webbservern och databastrafik (port 5432) från webbservern till databasen, medan all annan trafik mellan zonerna blockeras.
 
-### Rollen flask
+### Rollen flask (Webbserver)
 
 Isolerar applikationen i ett virtual environment (/opt/flask/venv) och körs som en begränsad systemd-tjänst med Restart=always. Installerar Python 3, Gunicorn och beroenden från requirements.txt.
 
-### Rollen Nginx
-
-Döljer backend-servrarnas interna IP-adresser. Den tar emot trafik på prot 80 och skickar den vidare, vilket hindrar externa användare från att prata direkt med Flask-servern.
-
 ### Rollen database
 
-Tillämpar principen om Least Privilege. Installerar PostgreSQL och konfigurerar pg_hba.conf så att enbart webbserverns interna IP-adress tillåts ansluta. All extern åtkomst på port 5432 blockeras.
+Installerar och härdar PostgreSQL. Den konfigurerar pg_hba.conf för att endast tillåta anslutningar från webbserverns specifika IP (10.0.2.2) och aktiverar en lokal brandvägg (UFW) som agerar som ett extra skyddslager (Defense in Depth).
 
 ### Flask-applikationen (app.py)
 
-En Python-baserad applikation fom används för att verifiera att hela kedjan fungerar säkert. All konfiguration läses dynamiskt via os.environ.get().
-
-| Endpoint | Metod | Beskrivning |
-|---|---|---|
-| `/` | GET | Verifierar kontakt mellan Nginx och Flask.motorn. |
-| `/info` | GET | Returnerar JSON med hostname och miljödata (för felsökning). |
-| `/health` | GET | Health check - bekräftar att applikationen är vid liv. | 
+En specialskriven applikation som används för att verifiera kedjan. Den innehåller endpoints för:
+- Databasverifiering: Testar att webbservern kan skriva till och läsa från databasen i backend-zonen.  
+- Systeminfo: Visar hostname för att bekräfta vilken zon som svarar.
+- Health Check: Används för att verifiera att tjänsten är uppe och nåbar genom brandväggen.
 
 ---
 
@@ -154,16 +153,27 @@ En Python-baserad applikation fom används för att verifiera att hela kedjan fu
 
 - [Oracle VirtualBox](https://www.virtualbox.org/) - testat med version 7.x
 - [Vagrant](https://developer.hashicorp.com/vagrant/install) - testat med version 2.x
+- [Git](https://git-scm.com/)
 
 **Hårdvarukrav:**
-- Minst 8 GB RAM, men 16 GB är rekomenderat (projektet använder totalt cirka 3 GB)
+
+- Minst 8 GB RAM, men 16 GB är rekommenderat (projektet använder totalt cirka 3 GB)
 - Minst 20 GB ledigt diskutrymme
+
+**Nätverkskonfiguration:**
+
+- Internetåtkomst
+
+**Projektspecifika filer:**
+
+- Secrets-fil: Man behöver manuellt skapa filen ansible/vars/secrets.yml på datorn. Denna fil ska innehålla känslig information som lösenord och ska aldrig laddas upp till Git.
 
 ---
 
 ## Kom igång
 
 ```bash
+
 # 1. Klona repot
 git clone git@github.com:DoomPlayya/Project-1---Double-homed-firewall.git
 cd Project-1---Double-homed-firewall
@@ -172,7 +182,7 @@ cd Project-1---Double-homed-firewall
 # Skapa och öppna secrets-filen inuti projektet
 nano ansible/vars/secrets.yml
 
-# Inuti filen skrivs egna värden
+# Lägg till egna värden
 valut_db_password:"Lösenord"
 
 # 3. Skapa maskinerna (utan att konfigurera dem än)
@@ -190,78 +200,129 @@ sudo apt update
 sudo apt install -y ansible 
 
 # 7. Kör konfigurationen
-ansible-playbook -i ansible/inventory.ini
-ansible/site.yml 
+cd /vagrant
+ansible-playbook -i ansible/inventory.ini ansible/site.yml 
 
 # 8. Verifiera att allt fungerar
 bash test/verify.sh
+
 ```
 
 ---
 
 ## Secrets
 
-Filen ansible/vars/secrets.yml innehåller känslig information såsom lösenord till databasen. Denna fil är inkluderad i .gitignore och ska aldrig committas till GitHub, utan måste skapas manuellt på den maskin där projektet körs.
+I detta projekt hanteras känslig information, såsom databaslösenord och SSH-nycklar, med hög säkerhet för att förhindra att de hamnar i versionshanteringen.
 
-**Skapa secrets.yml**
-Eftersom filen inte finns repot måste man skapa den manuellt:
+**Hantering av känslig data**
 
-```bash
-# 1. Skapa och öppna secrets-filen inuti projektet
-nano ansible/vars/secrets.yml
+Vi använder en gitignore strategi för att hantera lokala hemligheter. Filen ansible/vars/secrets.yml innehåller de faktiska lösenorden och läses in av Ansible under körning, men filen laddas aldrig upp till GitHub.
 
-# 2. Inuti filen skrivs egna värden
-valut_db_password:"Lösenord"
-```
+**Varför lagras inte secrets i Git?**
 
-```
-vars_files
-- ansible/vars/main.yml
-- ansible/vars/secrets.yml
-```
+Att checka in lösenord i ett publikt (eller privat) repo är en stor säkerhetsrisk. Om en angripare får tillgång till koden skulle de direkt kunna logga in i databasen. Genom att separera konfiguration från hemligheter följer projektet principen om Configuration Hardening.
+
+**Instruktion för användare*
+
+1. Skapa filen ansible/vars/secrets.yml
+2. Fyll i egna värden
+3. Verifiera att filen är listad i projektets .gitignore.
 
 ---
 
 ## Säkerhetsåtgärder
 
+**Säkerhetsåtgärder (Automatiserade via Ansible)**
+
+| Åtgärd | Var | Hur verifieras det |
+|---|---|---|
+| IP-Forwarding | Firewall.VM | `cat /proc/sys/net/ipv4/ip_forward` (Värdet ska vara 1 om IP-Forwarding är påslaget) |
+| Nätverksisolation | Alla zoner (Frontend, DMZ, Backend) | Ping mellan `client` och `database` ska misslyckas |
+| Trafikstyrning (iptables/nftables) | Firewall-VM | `sudo iptables -L -n -v` visar träffar på regler för port 80/443 och 5432 |
+
 ---
 
 ## Säkerhetsanalys
+
+### Kvarvarande brister
+
+**Brist 1: Firewall-VM som Single Point of Failure (SPoF)**
+
+Om brandväggen får ner, stannar all trafik mellan zonerna.
+
+*Åtgärd:* Implementera redundans genom att ha två brandväggar med samma konfiguration.
+
+*Accepterat i denna miljö:* eftersom detta är en labbmiljö fokuserad på logik och nätverksegmentering snarare än driftssäkerhet och upptid, fungerar det att ha en enskild brandvägg.
+
+---
+
+**Brist 2: Okrypterad trafik mellan webbserver och databas**
+
+Även om brandväggen begränsar trafiken till port 5432, skickas data mellan webbservern och databasen i klartext över det interna nätverket (backend). En angripare som lyckas avlyssna trafiken i den zonen kan läsa känslig information.
+
+*Åtgärd:* Konfigurera PostgreSQL att endast acceptera anslutningen via SSL/TLS och se till att webbservern verifierar databasens certifikat.
+
+*Accepterat i denna miljö:* Backend-nätverket (10.0.3.0/24) är ett strikt isolerat internt nätverk dom saknar exponering mot internet. Åtkomst kräver fysisk tillgång till värddatorn. I denna labbmiljö bedöms risken för avlyssning (sniffing) på interna segment som vara låg, och fokus har lagts på nätverkssegmentering snarare än kryptering.
+
+---
+
+**Brist 3: Brist på centraliserad loggning av brandväggshändelser:**
+
+Brandväggen filterar trafik, men loggarna lagras lokalt på brandväggsmaskinen. Om en angripare tar kontroll över brandväggen kan angripare radera spåren av sina intrång, vilket gör incidentrespons omöjlig.
+
+*Åtgärd:* Implementera en central loggserver i en separat zon dit brandväggen skickar alla iptables-loggar i realtid.
+
+*Accepterat i denna miljö:* Ja, då projektets omfattning främst gäller automatisering (Ansible) och grundläggande säkerhetsskydd, inte avancerad säkerhetsövervakning.
+
+---
+
+### Vad som skyddar miljön
+
+Trots de identifierade bristerna har infrastukturen flera robusta skyddslager som samverkar för att minimera risken:
+
+- Genom att använda en dedikerad firewall-VM med tre separata nätverksgränssnitt tvingas all trafik mellan zonerna (Frontend, DMZ, Backend) att passera en central kontrollpunkt.
+- Databasservern ör placerad i ett hekt isolerat backend-nätverkt som saknar direktontakt med både klientnätverket och internet.
+- Brandväggen är konfigurerad med en Default Deny-policy, vilket innebär att all trafik blockeras förutom den som uttryckligen tillåtits.
+- Varje zon och maskin har endast de rättigheter som krävs för dess specificka funktion, det vill säga Least Privilege-principen. Exempelvis kan klienten nå webbservern, men har ingen teknisk möjlighet att ens pinga databsen.
+- Inga lösenord eller konfidentiella uppgifter lagras i GitHub. Istället används gitignore och en secrets.yml-fil som inte gör att känslig information laddas upp på GitHub.
+- Eftersom hela miljön är definierad i kod kan en komprometterad maskin enkelt förstöras och återskapas till ett garanterat säkert tillstånd.
 
 ---
 
 ## Verfiering
 
-Kör det automatiserade verifieringsskriptet inifrån brandväggen:
+För att säkerställa att infrastrukturen är korrekt konfigurerad och att säkerhetsreglerna efterlevs används ett automatiserat verifieringsskript. Detta skript körs inifrån brandväggen för att testa anslutningar mellan de olika zonerna (frontend-net, dmz-net och backend-net).
+
+**Köra verifieringsskriptet**
+Logga in på brandväggen och kör skriptet:
 
 ```bash
-# Gå in i brandväggen
+
 vagrant ssh firewall
-
-# Kör skriptet
+cd /vagrant
 bash test/verify.sh
-```
-
-Vad skriptet kontrollerar:
-
-- Att Nginx och Flask-motorn samarbetar och att /health-endpointen returnerar HTTP 200.
-- Att databasporten (5432) är öppen och nårbar inifrån nätverket.
--  Att Flask-applikationen är aktiv och körs som en systemd-tjänst på backend-servern.
-- Att rätt trafik tillåts mellan zonerna med hjälp av brandväggen.
-
-Förväntat output:
 
 ```
-================================
- Verifiering av infrastruktur
-================================
-✓ Webbserver svarar! (HTTP 200 på /health)
-✓ Databasporten är öppen! (Port 5432 nåbar)
-✓ Flask-tjänsten är aktiv! (Systemd status: active)
-================================
- Resultat: 3 godkända, 0 misslyckade
-================================
-```
+
+**Tester som genomförs**
+Skriptet kontrollerar följande flöden för att säkerställa att nätverkssegmenteringen fungerar enligt design.
+
+| Testmoment | Metod | Förväntat resultat | Beskrivning |
+|---|---|---|---|
+| Webbserver-test | `curl -l http://10.0.3.2/health` | HTTP 200 OK | Verifierar att Nginx/Flask-tjänsten i DMZ-zonen är aktiv och nårbar genom brandväggen. |
+| Databas-anslutning | `nc -zv 10.0.3.2 5432` | Succeeded | Bekräftar att brandväggen tillåter trafik på port 5432 och att PostgreSQL-tjänsten lyssnar i backend-nätet. |
+| Tjänsteverifiering | `systemctl is-active flask` | active | Använder Ansible för att bekräfta att Flask-applikationen faktiskt körs som en systemd-tjänst på målmaskinen. |
+| Nätverksisolation | `ping 10.0.3.2` (från Klient) | Destination Host Unreachable | Verifierar att klienten i frontend-nätet inte kan nå backend-zonen direkt utanför tillåtna regler. |
+
+**Manuella kontroller**
+Utöver det automatiserade skriptet kan följande kommandon köras på brandväggen för att inspektera den aktiva trafiken:
+
+Visa aktiva brandväggsregler och träffstatistik:
+- `sudo iptables -L -n -v`   
+- Kontrollera routing-tabellen:
+`ip route`
+- Verifiera IP-forwarding:
+`cat /proc/sys/net/ipv4/ip_forward` (ska returnera 1)
 
 ---
 
