@@ -178,30 +178,33 @@ En specialskriven applikation som används för att verifiera kedjan. Den inneh�
 git clone git@github.com:DoomPlayya/Project-1---Double-homed-firewall.git
 cd Project-1---Double-homed-firewall
 
-# 2. Sätt egna värden i ansible/vars/secrets.yml
-# Skapa och öppna secrets-filen inuti projektet
-nano ansible/vars/secrets.yml
-
-# Lägg till egna värden
-valut_db_password:"Lösenord"
-
-# 3. Skapa maskinerna (utan att konfigurera dem än)
+# 2. Skapa maskinerna (utan att konfigurera dem än)
 cd vagrant
 vagrant up --no-provision
 
-# 4. Kontrollera att maskinerna är igång
+# 3. Kontrollera att maskinerna är igång
 vagrant status
 
-# 5. SSH in i brandväggen
+# 4. SSH in i brandväggen
 vagrant ssh firewall
 
-# 6. Installera Ansible inuti brandväggen
+# 5. Installera Ansible inuti brandväggen
 sudo apt update
+sudo apt install git
 sudo apt install -y ansible 
 
+# 6. Skapa secrets.yml fil
+git clone -b master https://github.com/DoomPlayya/Project-1---Double-homed-firewall.git
+cd Project-1---Double-homed-firewall
+cd ansible
+cd vars
+nano secrets.yml
+# Kopiera in och lägg till egna värden
+valut_db_password:"Skriv_nytt_lösenord"
+
 # 7. Kör konfigurationen
-cd /vagrant
-ansible-playbook -i ansible/inventory.ini ansible/site.yml 
+cd ..
+ansible-playbook -i inventory.ini site.yml -e "@vars/secrets.yml"
 
 # 8. Verifiera att allt fungerar
 bash test/verify.sh
