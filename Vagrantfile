@@ -35,7 +35,11 @@ Vagrant.configure("2") do |config|
       ansible.playbook = "ansible/site.yml"
       ansible.inventory_path = "ansible/inventory.ini"
       ansible.install_mode = "pip"
+      ansible.compatibility_mode = "2.0"
+      ansible.provisioning_path = "/vagrant/ansible"
     end  
+
+    fw.vm.provision "shell", path: "test/verify.sh", privileged: false
   end
 
   config.vm.define "client" do |client|
