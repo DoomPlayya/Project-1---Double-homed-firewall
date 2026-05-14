@@ -15,7 +15,7 @@ Vagrant.configure("2") do |config|
   config.vm.box = BOX_IMAGE
   config.vm.boot_timeout = 600
   config.ssh.forward_agent = true
-  config.ssh.insert_key = false
+  config.ssh.insert_key = true
 
   config.vm.define "firewall" do |fw|
     fw.vm.hostname = "firewall"
