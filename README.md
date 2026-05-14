@@ -31,7 +31,7 @@
 |---|---|---|---|---|
 | `firewall` | Brandvägg | Frontend: 10.0.1.1, DMZ: 10.0.5.1, Backend: 10.0.3.1 | `:80 → host:8080` | Tar emot trafik från hosten och skickar vidare till webbservern |
 | `client` | Användare | 10.0.1.2 | — | Host-datorn som testar systemet |
-| `webserver` | Webbserver | 10.0.5.2 | — | Kör Nginx och visar hemsidan |
+| `webserver` | Webbserver | 10.0.5.2 | — | Kör Nginx, Flask och visar hemsidan |
 | `database` | Databas | 10.0.3.2 | — | Lagrar data, isolerad från internet |
 
 ---
@@ -80,8 +80,7 @@ Project-1---Double-homed-firewall/
 │   │           └── nginx.conf.j2
 │   ├── vars/
 │   │   ├── main.yml         # Globala variabler (IP-adresser, portar)
-│   │   ├── secrets.yml      # GITIGNORERAD — känsliga lösenord
-│   │   └── secrets_example.yml # Mall för lösenord (utan riktiga värden)
+│   │   └── secrets.yml      # GITIGNORERAD — känsliga lösenord
 │   ├── ansible.cfg          # Inställningar för Ansible-körningen
 │   ├── inventory.ini        # Definition av noder och IP-adresser
 │   └── site.yml             # Master playbook som kör alla roller
@@ -92,6 +91,7 @@ Project-1---Double-homed-firewall/
 ├── test/
 │   └── verify.sh            # Script för automatiserad verifiering   
 │
+├── .gitattributes           # Håller verify.sh i LF format
 ├── .gitignore               # Exkluderar känsliga filer från Git
 ├── README.md                # Projektdokumentation (denna fil)
 └── Vagrantfile              # Definition av virtuella maskiner och nätverk
@@ -179,8 +179,8 @@ git clone git@github.com:DoomPlayya/Project-1---Double-homed-firewall.git
 cd Project-1---Double-homed-firewall
 
 # 2. Skapa maskinerna (utan att konfigurera dem än)
-cd vagrant
 vagrant up --no-provision
+vagrant provision firewall
 
 # 3. Kontrollera att maskinerna är igång
 vagrant status
@@ -194,19 +194,23 @@ sudo apt install git
 sudo apt install -y ansible 
 
 # 6. Skapa secrets.yml fil
-git clone -b master https://github.com/DoomPlayya/Project-1---Double-homed-firewall.git
+git clone -b main https://github.com/DoomPlayya/Project-1---Double-homed-firewall.git
 cd Project-1---Double-homed-firewall
 cd ansible
 cd vars
 nano secrets.yml
 # Kopiera in och lägg till egna värden
 valut_db_password:"Skriv_nytt_lösenord"
+# Klicka på tangenterna Ctrl+o och sedan Enter 
+# Klicka sedan på tangenterna Ctrl+X
 
 # 7. Kör konfigurationen
 cd ..
 ansible-playbook -i inventory.ini site.yml -e "@vars/secrets.yml"
 
-# 8. Verifiera att allt fungerar
+# 8. Verifiera att allt fungera
+cd /vagrant
+chmod +x test/verify.sh
 bash test/verify.sh
 
 ```
@@ -230,6 +234,7 @@ Att checka in lösenord i ett publikt (eller privat) repo är en stor säkerhets
 1. Skapa filen ansible/vars/secrets.yml
 2. Fyll i egna värden
 3. Verifiera att filen är listad i projektets .gitignore.
+4. Lägg in filen manullet i firewall-VM:en.
 
 ---
 
@@ -265,7 +270,7 @@ Om brandväggen får ner, stannar all trafik mellan zonerna.
 
 *Åtgärd:* Konfigurera PostgreSQL att endast acceptera anslutningen via SSL/TLS och se till att webbservern verifierar databasens certifikat.
 
-*Accepterat i denna miljö:* Backend-nätverket (10.0.3.0/24) är ett strikt isolerat internt nätverk dom saknar exponering mot internet. Åtkomst kräver fysisk tillgång till värddatorn. I denna labbmiljö bedöms risken för avlyssning (sniffing) på interna segment som vara låg, och fokus har lagts på nätverkssegmentering snarare än kryptering.
+*Accepterat i denna miljö:* Backend-nätverket (10.0.3.0/24) är ett strikt isolerat internt nätverk som saknar exponering mot internet. Åtkomst kräver fysisk tillgång till värddatorn. I denna labbmiljö bedöms risken för avlyssning (sniffing) på interna segment som vara låg, och fokus har lagts på nätverkssegmentering snarare än kryptering.
 
 ---
 
@@ -284,9 +289,9 @@ Brandväggen filterar trafik, men loggarna lagras lokalt på brandväggsmaskinen
 Trots de identifierade bristerna har infrastukturen flera robusta skyddslager som samverkar för att minimera risken:
 
 - Genom att använda en dedikerad firewall-VM med tre separata nätverksgränssnitt tvingas all trafik mellan zonerna (Frontend, DMZ, Backend) att passera en central kontrollpunkt.
-- Databasservern ör placerad i ett hekt isolerat backend-nätverkt som saknar direktontakt med både klientnätverket och internet.
+- Databasservern är placerad i ett helt isolerat backend-nätverkt som saknar direktontakt med både klientnätverket och internet.
 - Brandväggen är konfigurerad med en Default Deny-policy, vilket innebär att all trafik blockeras förutom den som uttryckligen tillåtits.
-- Varje zon och maskin har endast de rättigheter som krävs för dess specificka funktion, det vill säga Least Privilege-principen. Exempelvis kan klienten nå webbservern, men har ingen teknisk möjlighet att ens pinga databsen.
+- Varje zon och maskin har endast de rättigheter som krävs för dess specifika funktion, det vill säga "Least Privilege"-principen. Exempelvis kan klienten nå webbservern, men har ingen teknisk möjlighet att ens pinga databasen.
 - Inga lösenord eller konfidentiella uppgifter lagras i GitHub. Istället används gitignore och en secrets.yml-fil som inte gör att känslig information laddas upp på GitHub.
 - Eftersom hela miljön är definierad i kod kan en komprometterad maskin enkelt förstöras och återskapas till ett garanterat säkert tillstånd.
 
@@ -303,6 +308,7 @@ Logga in på brandväggen och kör skriptet:
 
 vagrant ssh firewall
 cd /vagrant
+chmod +x test/verify.sh
 bash test/verify.sh
 
 ```
@@ -312,10 +318,10 @@ Skriptet kontrollerar följande flöden för att säkerställa att nätverkssegm
 
 | Testmoment | Metod | Förväntat resultat | Beskrivning |
 |---|---|---|---|
-| Webbserver-test | `curl -l http://10.0.3.2/health` | HTTP 200 OK | Verifierar att Nginx/Flask-tjänsten i DMZ-zonen är aktiv och nårbar genom brandväggen. |
+| Webbserver-test | `curl -l http://10.0.5.2/` | HTTP 200 OK | Verifierar att Nginx/Flask-tjänsten i DMZ-zonen är aktiv och nårbar genom brandväggen. |
+| Verifiering av Webbprotokoll | `curl http://minhemsida.test` `curl -k https://minhemsida.test` | HTTP 200 OK | Får kontakt med hemsida via http/https |
 | Databas-anslutning | `nc -zv 10.0.3.2 5432` | Succeeded | Bekräftar att brandväggen tillåter trafik på port 5432 och att PostgreSQL-tjänsten lyssnar i backend-nätet. |
 | Tjänsteverifiering | `systemctl is-active flask` | active | Använder Ansible för att bekräfta att Flask-applikationen faktiskt körs som en systemd-tjänst på målmaskinen. |
-| Nätverksisolation | `ping 10.0.3.2` (från Klient) | Destination Host Unreachable | Verifierar att klienten i frontend-nätet inte kan nå backend-zonen direkt utanför tillåtna regler. |
 
 **Manuella kontroller**
 Utöver det automatiserade skriptet kan följande kommandon köras på brandväggen för att inspektera den aktiva trafiken:
@@ -326,6 +332,8 @@ Visa aktiva brandväggsregler och träffstatistik:
 `ip route`
 - Verifiera IP-forwarding:
 `cat /proc/sys/net/ipv4/ip_forward` (ska returnera 1)
+- Från `client`: ping 10.0.5.2, ping 10.0.3.2 (Pingen ska INTE komma fram)
+- Från `webserever`: ping 10.0.1.2, 10.0.3.2 (Pingen ska INTE komma fram)
 
 ---
 
@@ -341,7 +349,7 @@ Vi har valt att använda VirtualBox intnet (interna nätverk) istället för hos
 
 ### Varför separata VMs och isolerade nätverk?
 
-Att köra Flask och PostgreSQL på samma maskin hade varit resursbesparande, men det hade eliminerat nätverkssegmenteringen. Infrastrukturen är uppdelad i tre isolerade zoner: Frontend (Klient), DMZ (Webbserver) och Backend (Databas). Detta val baseras på principen om Defense in Depth, där varje lager fungerar som en oberoende barriär. Genom att placera databasen i ett backend-nätverk som helt saknar kontakt med klientnätverket minimeras attackytan mot systemets mest känsliga data.
+Att köra Flask och PostgreSQL på samma maskin hade varit resursbesparande, men det hade eliminerat nätverkssegmenteringen. Infrastrukturen är uppdelad i tre isolerade zoner: Frontend (Klient), DMZ (Webbserver) och Backend (Databas). Detta val baseras på principen om "Defense in Depth", där varje lager fungerar som en oberoende barriär. Genom att placera databasen i ett backend-nätverk som helt saknar kontakt med klientnätverket minimeras attackytan mot systemets mest känsliga data.
 
 ### Varför automatiserad orkestrering via Ansible?
 
@@ -349,11 +357,11 @@ Ett strategiskt val har varit att låta Ansible sköta all konfiguration av mask
 
 ### Varför systemd-tjänst för Flask-applikationen?
 
-Istället för att starta Flask-appen manuellt i en terminal används en systemd-unit. Detta val görs för att säkerställa att applikationen är robust och driftsäker. Med konfigurationen Restart=always startar tjänsten automatiskt om vid en eventuell krasch eller om maskinen startas om, vilket är ett krav för automatiserade driftfunktioner i en professionell miljö.
+Istället för att starta Flask-appen manuellt i en terminal används en systemd-unit. Detta val görs för att säkerställa att applikationen är robust och driftsäker. Med konfigurationen *Restart=always* startar tjänsten automatiskt om vid en eventuell krasch eller om maskinen startas om, vilket är ett krav för automatiserade driftfunktioner i en professionell miljö.
 
-### Tillämpning av Least privilege-principen
+### Tillämpning av "Least privilege"-principen
 
-Varje nätverksregel i brandväggen är konfigurerad enligt Least privilege-principen. Istället för att tillåta all trafik mellan zoner har vi valt att endast öppna de specifika portar som krävs för att tjänsterna ska fungera: port 80/443 för webbtrafik och port 5432 för databaskommunikation. All annan trafik blockeras som standard (Default Deny), vilket är en kritisk säkerhetsåtgärd för att begränsa verkan av en eventuell kompromettring.  
+Varje nätverksregel i brandväggen är konfigurerad enligt "Least privilege"-principen. Istället för att tillåta all trafik mellan zoner har vi valt att endast öppna de specifika portar som krävs för att tjänsterna ska fungera: port 80/443 för webbtrafik och port 5432 för databaskommunikation. All annan trafik blockeras som standard (Default Deny), vilket är en kritisk säkerhetsåtgärd för att begränsa verkan av en eventuell kompromettering.  
 
 ### Varför miljövariabler istället för hårdkodning?
 
