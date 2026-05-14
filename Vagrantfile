@@ -23,9 +23,18 @@ Vagrant.configure("2") do |config|
     fw.vm.network "private_network", ip: FW_DMZ_IP, virtualbox__intnet: "dmz-net"
     fw.vm.network "private_network", ip: FW_BACK_IP, virtualbox__intnet: "backend-net"
     
+    fw.vm.provision "shell", inline: <<-SHELL
+      mkdir -p /home/vagrant/.ssh/vagrant_keys
+      cp -r /vagrant/.vagrant/machines/ /home/vagrant/.ssh/vagrant_keys/
+      chown -R vagrant:vagrant /home/vagrant/.ssh/vagrant_keys/
+      chmod 700 /home/vagrant/.ssh/vagrant_keys
+      find /home/vagrant/.ssh/vagrant_keys -name "private_key" -exec chmod 600 {} \\;
+    SHELL
+
     fw.vm.provision "ansible_local" do |ansible|
       ansible.playbook = "ansible/site.yml"
       ansible.inventory_path = "ansible/inventory.ini"
+      ansible.install_mode = "pip"
     end  
   end
 
