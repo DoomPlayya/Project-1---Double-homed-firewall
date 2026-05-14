@@ -331,6 +331,34 @@ Visa aktiva brandväggsregler och träffstatistik:
 
 ## Designval och motivering
 
+### Varför en Double-homed Firewall-arkitektur?
+
+Hjärtat i projektet är en brandvägg med tre separata nätverksgränssnitt (frontend-net, dmz-net och backend-net). Genom att använda denna arkitektur istället för en enkel router tvingas all trafik att passera en central inspektionspunkt. Detta förhindrar att en angripare kan röra sig fritt mellan zoner (sidledsförflyttning) och ger oss full kontroll över vilka paket som tillåts flöda mellan klienten och de interna servrarna.
+
+### Varför använda interna nätverk (intnet) istället för host-only?
+
+Vi har valt att använda VirtualBox intnet (interna nätverk) istället för host-only för kommunikationen mellan de virtuella maskinerna. Detta val görs för att säkerställa att Windows-värddatorn inte är en del av labbnätverket. Genom att fysiskt separera labbmiljön från värdmaskinens nätverk skapas en säker labbmiljö där tester kan genomföras utan att riskera värddatorns säkerhet.
+
+### Varför separata VMs och isolerade nätverk?
+
+Att köra Flask och PostgreSQL på samma maskin hade varit resursbesparande, men det hade eliminerat nätverkssegmenteringen. Infrastrukturen är uppdelad i tre isolerade zoner: Frontend (Klient), DMZ (Webbserver) och Backend (Databas). Detta val baseras på principen om Defense in Depth, där varje lager fungerar som en oberoende barriär. Genom att placera databasen i ett backend-nätverk som helt saknar kontakt med klientnätverket minimeras attackytan mot systemets mest känsliga data.
+
+### Varför automatiserad orkestrering via Ansible?
+
+Ett strategiskt val har varit att låta Ansible sköta all konfiguration av maskinerna inifrån brandväggen. Detta säkerställer idempotens, vilket innebär att miljön kan återskapas till exakt samma säkra tillstånd oavsett utgångsläge. Genom att automatisera installationen av tjänster som PostgreSQL och Flask minskar risken för mänskliga konfigurationsfel, vilket är en vanlig källa till säkerhetsbrister.
+
+### Varför systemd-tjänst för Flask-applikationen?
+
+Istället för att starta Flask-appen manuellt i en terminal används en systemd-unit. Detta val görs för att säkerställa att applikationen är robust och driftsäker. Med konfigurationen Restart=always startar tjänsten automatiskt om vid en eventuell krasch eller om maskinen startas om, vilket är ett krav för automatiserade driftfunktioner i en professionell miljö.
+
+### Tillämpning av Least privilege-principen
+
+Varje nätverksregel i brandväggen är konfigurerad enligt Least privilege-principen. Istället för att tillåta all trafik mellan zoner har vi valt att endast öppna de specifika portar som krävs för att tjänsterna ska fungera: port 80/443 för webbtrafik och port 5432 för databaskommunikation. All annan trafik blockeras som standard (Default Deny), vilket är en kritisk säkerhetsåtgärd för att begränsa verkan av en eventuell kompromettring.  
+
+### Varför miljövariabler istället för hårdkodning?
+
+Flask-applikationen är designad för att läsa in databasens lösenord och IP-adress via miljövariabler. Detta gör koden portabel och säker. Genom att injicera dessa värden via Ansible (från vår secrets.yml) kan samma kod köras i olika miljöer utan att känslig information någonsin lagras i själva källkoden, vilket är en central princip inom säkerhetsarkitektur.
+
 ---
 
 *Skapad av: Elsa Grahn och Ida-Marie Näsström-Öqvist*
