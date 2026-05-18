@@ -1,10 +1,4 @@
 ---
-- name: Diftsätt Flask-appen på Vagrant
-  hosts: all
-  become: yes
-  vars_files:
-    - vars/secrets.yml
-    
 - name: Installera Python3 och Pip, databasberoende och Lynx
   apt:
     name:
