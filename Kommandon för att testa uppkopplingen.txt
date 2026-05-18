@@ -1,4 +1,21 @@
-sudClient: - ping 10.0.5.2 
+____ Start-up of project ____
+Vagrant up --no-provision
+vagrant provision firewall
+
+____ Config of firewall ____
+sudo apt update && sudo apt install -y git ansible
+(sudo apt update, sudo apt install -y git ansible, sudo apt install git, sudo apt install -y ansible)
+git clone -b CompleteConfig https://github.com/DoomPlayya/Project-1---Double-homed-firewall.git
+cd Project-1---Double-homed-firewall/ansible/vars -> nano secrets.yml
+cd .. -> ansible-playbook -i inventory.ini site.yml -e "@vars/secrets.yml"
+
+___ verify script on firewall___
+cd /vagrant
+chmod +x test/verify.sh
+bash test/verify.sh
+
+____ manual control of set-up ____
+Client: - ping 10.0.5.2 
         - ping 10.0.3.2
 curl http://minhemsida.test
      -k https://minhemsida.test
@@ -6,11 +23,3 @@ curl http://minhemsida.test
 Webbservern: - ping 10.0.1.2
              - ping 10.0.3.2    
 nc -zv 10.0.3.2 5432
-
-sudo apt update
-sudo apt install git
-sudo apt install -y ansible
-git clone -b CompleteConfig https://github.com/DoomPlayya/Project-1---Double-homed-firewall.git
-cd Project-1---Double-homed-firewall
-cd vars -> nano secrets.yml
-cd .. -> ansible-playbook -i inventory.ini site.yml -e "@vars/secrets.yml"
