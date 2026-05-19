@@ -5,6 +5,7 @@ After=network.target
 [Service]
 User=vagrant
 WorkingDirectory=/home/vagrant
+Environment="vault_db_password={{ vault_db_password }}"
 ExecStart=/usr/bin/python3 /home/vagrant/app.py
 Restart=always
 

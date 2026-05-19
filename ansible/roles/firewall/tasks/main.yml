@@ -100,6 +100,22 @@
     limit_burst: 5
     jump: ACCEPT
 
+- name: Lägg till lokal domänuppslagning i /etc/hosts
+  become: yes
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ webserver_ip }} {{ my_web_domain }}"
+    state: present
+
+- name: Tillåt brandväggen att nå webbservern (för verifiering)
+  iptables:
+    chain: OUTPUT
+    protocol: tcp
+    destination: "{{ webserver_ip }}"
+    destination_port: "{{ item }}"
+    jump: ACCEPT
+  loop: [ "{{ http }}", "{{ https }}" ]
+
 - name: Aktivera NAT Masquerade (Gör att svaren hittar hem)
   iptables:
     table: nat
@@ -134,3 +150,8 @@
 
 - name: Spara iptables-regler till fil
   shell: iptables-save > /etc/iptables/rules.v4
+
+- name: Spara reglerna permanent
+  shell: |
+    iptables-save > /etc/iptables/rules.v4
+    ip6tables-save > /etc/iptables/rules.v6

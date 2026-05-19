@@ -16,12 +16,17 @@ def home():
 
 @app.route('/db')
 def test_db():
+    vault_db_password = os.environ.get("vault_db_password")
+        
+    if not vault_db_password:
+        return "<h1>Internt fel</h1><p>Miljövariabeln i vault_db_password saknas!</p>", 500
+    
     try:
         conn = psycopg2.connect(
-            host="10.0.3.2",
+            host="db_node",
             database="postgres",
             user="postgres",
-            password="mysecretpassword" 
+            password=vault_db_password
         )
         cur = conn.cursor()
         cur.execute('SELECT version();')
