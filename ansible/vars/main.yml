@@ -1,0 +1,28 @@
+---
+firewall_frontend_ip: "10.0.1.1"
+firewall_dmz_ip: "10.0.5.1"
+firewall_backend_ip: "10.0.3.1"
+
+webserver_ip: "10.0.5.2"
+database_ip: "10.0.3.2"
+client_ip: "10.0.1.2"
+
+frontend_net: "10.0.1.0/24"
+dmz_net: "10.0.5.0/24"
+backend_net: "10.0.3.0/24"
+
+default_port: "10.0.2.2"
+
+flask_port: 5000
+db_port: 5432
+ssh_port: 22
+dns_port: 53
+http: 80
+https: 443
+
+NET_PORT: enp0s3
+
+app_root: "/home/vagrant"
+app_script: "app.py"
+
+my_web_domain: "minhemsida.test"

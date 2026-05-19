@@ -1,0 +1,42 @@
+---
+    - name: Installera Nginx
+      apt: 
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Skapa mapp för SSL-certifikat
+      file:
+        path: "/etc/nginx/ssl/"
+        state: directory
+        mode: '0700'
+        owner: root
+        group: root
+
+    - name: Generera självsignerat certifikat i mapp
+      command: >
+        openssl req -x509 -nodes -days 90 -newkey rsa:2048
+        -keyout /etc/nginx/ssl/privkey.pem
+        -out /etc/nginx/ssl/fullchain.pem
+        -subj "/CN={{ my_web_domain }}"
+      args:
+        creates: /etc/nginx/ssl/fullchain.pem
+      notify: Restart Nginx
+
+    - name: Ta bort standard-länken för Nginx (för att undvika krockar)
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+    
+    - name: Konfigurera Nginx som Reverse Proxy
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/sites-available/flask_app
+      notify: Restart Nginx
+
+    - name: Aktivera webbplats
+      file:
+        src: /etc/nginx/sites-available/flask_app
+        dest: /etc/nginx/sites-enabled/flask_app
+        state: link
+      notify: Restart Nginx

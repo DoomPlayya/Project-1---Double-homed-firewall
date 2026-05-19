@@ -1,0 +1,49 @@
+---
+- name: Installera ACL, PostgreSQL och Python-anslutning
+  apt:
+    name: 
+      - acl
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+    state: present
+    update_cache: yes
+
+- name: Hitta sökvägen till postgresql.conf
+  find:
+    path: /etc/postgresql/
+    patterns: 
+      - 'postgresql.conf'
+      - 'pg_hba.conf'
+    recurse: yes
+  register: postgres_configs
+
+- name: Tillåt PostgreSQL att lyssna på nätverket
+  lineinfile:
+    path: "{{ item.path }}"
+    regexp: "^#?listen_addresses ="
+    line: "listen_addresses = '*'"
+  loop: "{{ postgres_configs.files }}"
+  when: "'postgresql.conf' in item.path"
+  notify: Restart Postgres
+
+- name: Tillåt anslutning från Webbserverns nätverk i pg_hba.conf
+  lineinfile:
+    path: "{{ item.path }}"
+    line: "host all all {{ dmz_net }} md5"
+    insertafter: EOF
+  loop: "{{ postgres_configs.files }}"
+  when: "'pg_hba.conf' in item.path"
+  notify: Restart Postgres
+
+- name: Sätt lösenord för postgres-användaren
+  become: yes
+  become_user: postgres
+  postgresql_user:
+    name: postgres
+    password: "{{ vault_db_password }}"
+
+- name: Sätt Default Gateway mot Brandväggen
+  shell: ip route replace default via {{ firewall_backend_ip }} 
+  args:
+    executable: /bin/bash

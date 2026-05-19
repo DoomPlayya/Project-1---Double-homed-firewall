@@ -1,0 +1,8 @@
+ansible/vars/secrets.yml
+.vagrant
+Kommandon för att testa uppkopplingen.txt
+ansible/roles/flask/templates/app.py.j2.py
+
+.env
+*.pem, *.key
+ansible_vault
