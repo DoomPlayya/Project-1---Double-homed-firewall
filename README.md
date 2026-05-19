@@ -63,13 +63,13 @@ Project-1---Double-homed-firewall/
 │   │   │   ├── defaults/
 │   │   │   │   └── main.yml
 │   │   │   ├── files/
-│   │   │       ├── app.py
 │   │   │       └── requirements.txt
 │   │   │   ├── handlers/
 │   │   │   │   └── main.yml
 │   │   │   ├── tasks/
 │   │   │   │   └── main.yml
 │   │   │   └── templates/
+│   │   │       ├── app.py.j2.py
 │   │   │       └── flask.service.j2
 │   │   └── nginx/           # Installation av Nginx som Reverse Proxy
 │   │       ├── handlers/
