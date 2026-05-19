@@ -69,7 +69,7 @@ Project-1---Double-homed-firewall/
 │   │   │   ├── tasks/
 │   │   │   │   └── main.yml
 │   │   │   └── templates/
-│   │   │       ├── app.py.j2.py
+│   │   │       ├── app.py.j2
 │   │   │       └── flask.service.j2
 │   │   └── nginx/           # Installation av Nginx som Reverse Proxy
 │   │       ├── handlers/
@@ -104,9 +104,9 @@ Project-1---Double-homed-firewall/
 ### Vagrantfile 
 
 Definierar fyra virtuella maskiner i VirtualBox som är uppdelade i tre separata interna nätverk (intnet) för att skapa en realistisk nätverkstopologi.
-- Firewall-VM: Fungerar som en gateway med tre gränssnitt: frontend-net (10.0.1.1), dmz-net (10.0.2.1) och backend-net (10.0.3.1). 
+- Firewall-VM: Fungerar som en gateway med tre gränssnitt: frontend-net (10.0.1.1), dmz-net (10.0.5.1) och backend-net (10.0.3.1). 
 - Klient-VM: Placerad i frontend-net (10.0.1.2).  
-- Webbserver-VM: Placerad i dmz-net (10.0.2.2).  
+- Webbserver-VM: Placerad i dmz-net (10.0.5.2).  
 - Databasserver-VM: Placerad i backend-net (10.0.3.2).  
 Windows-hosten är helt isolerad från dessa nätverk, vilket tvingar all trafik att passera brandväggen.
 
@@ -136,7 +136,7 @@ Isolerar applikationen i ett virtual environment (/opt/flask/venv) och körs som
 
 ### Rollen database
 
-Installerar och härdar PostgreSQL. Den konfigurerar pg_hba.conf för att endast tillåta anslutningar från webbserverns specifika IP (10.0.2.2) och aktiverar en lokal brandvägg (UFW) som agerar som ett extra skyddslager (Defense in Depth).
+Installerar och härdar PostgreSQL. Den konfigurerar pg_hba.conf för att endast tillåta anslutningar från webbserverns specifika IP (10.0.5.2) och aktiverar en lokal brandvägg (UFW) som agerar som ett extra skyddslager (Defense in Depth).
 
 ### Flask-applikationen (app.py)
 
